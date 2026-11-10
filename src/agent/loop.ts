@@ -205,10 +205,11 @@ export function runAgentTurn(
     onStepFinish: () => {
       steps++;
     },
-    onError: () => {
+    onError: ({ error }) => {
       console.error(
         JSON.stringify({
           event: "agent_error",
+          error: error instanceof Error ? error.stack || error.message : String(error),
           elapsedMs: Date.now() - started,
         }),
       );
