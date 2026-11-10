@@ -12,6 +12,8 @@ import {
   RefreshCw,
   Compass,
   ArrowUpRight,
+  Database,
+  Sparkles,
 } from "lucide-react";
 
 export default function ChatPage() {
@@ -19,6 +21,8 @@ export default function ChatPage() {
   const [clientTz, setClientTz] = useState<string>("UTC");
   const [currentDateStr, setCurrentDateStr] = useState<string>("");
   const [hydrating, setHydrating] = useState(true);
+  const [isSeeding, setIsSeeding] = useState(false);
+  const [seedSuccessMsg, setSeedSuccessMsg] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -83,6 +87,33 @@ export default function ChatPage() {
     return () => controller.abort();
   }, [conversationId, setMessages]);
 
+  const handleSeedData = async () => {
+    if (!conversationId) return;
+    setIsSeeding(true);
+    setSeedSuccessMsg(null);
+    try {
+      const res = await fetch("/api/seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSeedSuccessMsg("✅ Seeded into memory: Monday Nov 9 (5 CRM tools) & Nov 3 (Postgres options). Click a test query to verify!");
+        const msgRes = await fetch(`/api/chat?conversationId=${conversationId}`);
+        if (msgRes.ok) {
+          const msgData = await msgRes.json();
+          if (msgData?.messages) setMessages(msgData.messages);
+        }
+        setTimeout(() => setSeedSuccessMsg(null), 8000);
+      }
+    } catch (e) {
+      console.error("Seeding failed", e);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
   const testPrompts = [
     {
       title: "CRM Shortlist (Monday)",
@@ -137,6 +168,15 @@ export default function ChatPage() {
         {/* Live Context Indicators & Seed Button */}
         <div className="flex items-center flex-wrap gap-2 text-xs">
           <button
+            onClick={handleSeedData}
+            disabled={isLoading || isSeeding || !conversationId}
+            title="Seed the evaluation challenge conversations (Monday & Nov 3) into your session"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1c1917] hover:bg-[#c2410c] text-[#fffbeb] transition-colors font-medium cursor-pointer shadow-sm text-xs"
+          >
+            <Database className="w-3.5 h-3.5 text-[#fffbeb]" />
+            <span>{isSeeding ? "Seeding..." : "🌱 Seed Demo History"}</span>
+          </button>
+          <button
             onClick={() => {
               const id = crypto.randomUUID();
               localStorage.setItem("conversationId", id);
@@ -144,7 +184,7 @@ export default function ChatPage() {
               setConversationId(id);
             }}
             disabled={isLoading || hydrating}
-            className="px-3 py-2 border rounded-lg"
+            className="px-3 py-1.5 border border-[rgba(120,53,15,0.22)] rounded-full bg-[rgba(255,251,235,0.85)] hover:bg-[#fffbeb] text-[#44403c] font-medium transition-colors"
           >
             New conversation
           </button>
@@ -160,6 +200,20 @@ export default function ChatPage() {
       </header>
 
       {/* Seed Success Banner */}
+      {seedSuccessMsg && (
+        <div className="mt-3 p-3.5 rounded-xl bg-[#fffbeb] border border-[#c2410c]/40 text-[#c2410c] text-xs flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2 font-medium">
+            <Sparkles className="w-4 h-4 text-[#c2410c] shrink-0" />
+            <span>{seedSuccessMsg}</span>
+          </div>
+          <button
+            onClick={() => setSeedSuccessMsg(null)}
+            className="text-[#c2410c] hover:text-[#1c1917] font-bold ml-3 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* Test Scenarios Ribbon */}
       <div className="py-3 flex items-center gap-2 overflow-x-auto text-xs no-scrollbar">
         <span className="label-tag text-[#78350f] shrink-0 pr-1">
