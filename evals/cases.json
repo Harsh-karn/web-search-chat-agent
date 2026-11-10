@@ -1,0 +1,180 @@
+[
+  {
+    "id": "case_01_brief_crm_monday",
+    "category": "brief_example",
+    "query": "On Monday we shortlisted 5 CRM tools for a 20-person sales team. Has any of them changed pricing or shipped something big since?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-09",
+    "isSinceQuery": true,
+    "shouldFindHistory": true
+  },
+  {
+    "id": "case_02_brief_nov3_recall",
+    "category": "brief_example",
+    "query": "What did I ask you on 3 November? Is your answer still correct today?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-03",
+    "isSinceQuery": false,
+    "shouldFindHistory": true
+  },
+  {
+    "id": "case_03_brief_last_tuesday_postgres",
+    "category": "brief_example",
+    "query": "Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-03",
+    "isSinceQuery": true,
+    "shouldFindHistory": true
+  },
+  {
+    "id": "case_04_missing_history_oct14",
+    "category": "honest_refusal",
+    "query": "What did I ask you on 14 October about Kubernetes clusters?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-10-14",
+    "isSinceQuery": false,
+    "shouldFindHistory": false
+  },
+  {
+    "id": "case_05_missing_history_last_friday",
+    "category": "honest_refusal",
+    "query": "What tools did we discuss last Friday?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-06",
+    "isSinceQuery": false,
+    "shouldFindHistory": false
+  },
+  {
+    "id": "case_06_relative_yesterday",
+    "category": "temporal_relative",
+    "query": "What did we talk about yesterday?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-09",
+    "isSinceQuery": false,
+    "shouldFindHistory": true
+  },
+  {
+    "id": "case_07_relative_2_days_ago",
+    "category": "temporal_relative",
+    "query": "Did I ask you about Redis 2 days ago?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-08",
+    "isSinceQuery": false,
+    "shouldFindHistory": false
+  },
+  {
+    "id": "case_08_timezone_tokyo_midnight",
+    "category": "timezone_boundary",
+    "query": "What did I ask on Tuesday?",
+    "referenceDate": "2026-11-10T23:30:00.000Z",
+    "timezone": "Asia/Tokyo",
+    "expectedTemporal": "2026-11-10",
+    "isSinceQuery": false,
+    "shouldFindHistory": false
+  },
+  {
+    "id": "case_09_timezone_ny_evening",
+    "category": "timezone_boundary",
+    "query": "On Monday what was my question about Supabase?",
+    "referenceDate": "2026-11-10T02:00:00.000Z",
+    "timezone": "America/New_York",
+    "expectedTemporal": "2026-11-09",
+    "isSinceQuery": false,
+    "shouldFindHistory": false
+  },
+  {
+    "id": "case_10_explicit_iso_date",
+    "category": "temporal_explicit",
+    "query": "Did we talk on 2026-11-03 about database backups?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-03",
+    "isSinceQuery": false,
+    "shouldFindHistory": false
+  },
+  {
+    "id": "case_11_keyword_recall_no_date",
+    "category": "keyword_recall",
+    "query": "What was the CRM tool we discussed earlier?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "isSinceQuery": false,
+    "shouldFindHistory": true
+  },
+  {
+    "id": "case_12_no_history_at_all",
+    "category": "honest_refusal",
+    "query": "What did we decide on 1 January 2025 regarding the office space?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2025-01-01",
+    "isSinceQuery": false,
+    "shouldFindHistory": false
+  },
+  {
+    "id": "case_13_pricing_since_query_flag",
+    "category": "since_detection",
+    "query": "Has any pricing changed since last Tuesday for managed Postgres?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-03",
+    "isSinceQuery": true,
+    "shouldFindHistory": true
+  },
+  {
+    "id": "case_14_shipped_since_query_flag",
+    "category": "since_detection",
+    "query": "Have they shipped any major features since Monday?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-09",
+    "isSinceQuery": true,
+    "shouldFindHistory": true
+  },
+  {
+    "id": "case_15_non_temporal_question",
+    "category": "general_knowledge",
+    "query": "What is the capital of France?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "isSinceQuery": false,
+    "shouldFindHistory": false
+  },
+  {
+    "id": "case_16_multi_tool_crm_query",
+    "category": "parallel_search",
+    "query": "Check pricing for HubSpot, Salesforce, Pipedrive, Close, and Zoho CRM",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "isSinceQuery": false,
+    "shouldFindHistory": false
+  },
+  {
+    "id": "case_17_recall_past_sources",
+    "category": "source_recall",
+    "query": "What sources did you cite when answering my question on 3 November?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-03",
+    "isSinceQuery": false,
+    "shouldFindHistory": true
+  },
+  {
+    "id": "case_18_ambiguous_date_reasonable_assumption",
+    "category": "ambiguous_date",
+    "query": "What did I ask last week about vector search?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "isSinceQuery": false,
+    "shouldFindHistory": false
+  },
+  {
+    "id": "case_19_updated_since_detection",
+    "category": "since_detection",
+    "query": "Has anything updated since 3 November?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-03",
+    "isSinceQuery": true,
+    "shouldFindHistory": true
+  },
+  {
+    "id": "case_20_correct_today_recheck",
+    "category": "brief_example",
+    "query": "Is your answer from Monday still correct today?",
+    "referenceDate": "2026-11-10T12:00:00.000Z",
+    "expectedTemporal": "2026-11-09",
+    "isSinceQuery": false,
+    "shouldFindHistory": true
+  }
+]
