@@ -5,12 +5,12 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { NextRequest } from "next/server";
-const localSecret = randomBytes(32).toString("hex");
+const devFallbackSecret = "dev-chat-agent-secret-key-32-chars-min-pad-development-only";
 function secret() {
   const value = process.env.SESSION_SECRET;
   if (process.env.NODE_ENV === "production" && (!value || value.length < 32))
     throw new Error("SESSION_SECRET must contain at least 32 characters");
-  return value || localSecret;
+  return value || devFallbackSecret;
 }
 export function signSession(id: string) {
   return `${id}.${createHmac("sha256", secret()).update(id).digest("hex")}`;

@@ -1,13 +1,15 @@
 import assert from "node:assert";
 
+const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
+
 async function runDomAndLiveCheck() {
   console.log("==================================================");
-  console.log("DOM AND LIVE ENDPOINT VALIDATION (http://localhost:3001)");
+  console.log(`DOM AND LIVE ENDPOINT VALIDATION (${BASE_URL})`);
   console.log("==================================================");
 
   // 1. Fetch HTML
-  console.log("Step 1: Fetching rendered HTML from http://localhost:3001...");
-  const pageRes = await fetch("http://localhost:3001");
+  console.log(`Step 1: Fetching rendered HTML from ${BASE_URL}...`);
+  const pageRes = await fetch(BASE_URL);
   assert.strictEqual(pageRes.status, 200, "Page status must be 200 OK");
   const html = await pageRes.text();
   console.log(`  Page received (${html.length} bytes).`);
@@ -30,7 +32,7 @@ async function runDomAndLiveCheck() {
   // 3. Test /api/seed endpoint
   console.log("Step 3: Testing /api/seed endpoint...");
   const testConversationId = "11111111-2222-3333-4444-555555555555";
-  const seedRes = await fetch("http://localhost:3001/api/seed", {
+  const seedRes = await fetch(`${BASE_URL}/api/seed`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ conversationId: testConversationId }),
@@ -39,11 +41,12 @@ async function runDomAndLiveCheck() {
   const seedJson = await seedRes.json();
   console.log("  Seed response:", seedJson);
   assert.strictEqual(seedJson.success, true, "Seed must return success: true");
-  const cookie = seedRes.headers.get("set-cookie") || "";
+  const rawCookie = seedRes.headers.get("set-cookie") || "";
+  const cookie = rawCookie.split(";")[0];
 
   // 4. Test /api/chat endpoint with seeded session
   console.log("Step 4: Testing /api/chat streaming with seeded session...");
-  const chatRes = await fetch("http://localhost:3001/api/chat", {
+  const chatRes = await fetch(`${BASE_URL}/api/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
