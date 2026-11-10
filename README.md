@@ -20,13 +20,20 @@ npm install
 
 # 3. Configure API keys
 cp .env.example .env.local
-# Add your GEMINI_API_KEY and TAVILY_API_KEY
+# Add your GEMINI_API_KEY and TAVILY_API_KEY to .env.local
 
-# 4. Start local development server
+# 4. Start local development server (Web UI)
 npm run dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) to chat with the agent.
+Visit [http://localhost:3000](http://localhost:3000) to chat with the agent in the browser.
+
+### 💻 Terminal Chat (Interactive CLI)
+Prefer chatting in the command line? Run:
+
+```bash
+npm run chat
+```
 
 ---
 
@@ -68,8 +75,8 @@ npm run test:evals
 | **Correct recall / refusal when history is absent** | **100.0%** (20/20) | Accurately recalls seeded conversations and honestly refuses absent dates |
 | **Correct date resolution** | **100.0%** (20/20) | Resolves relative days, explicit dates, and boundary timezones |
 | **Honest outcome signal verification** | **100.0%** (20/20) | Strictly distinguishes *no history* vs *no changes found* vs *no sources* |
-| **Harness Latency p50** | **0.68 ms** | Sub-millisecond harness pre-processing overhead |
-| **Harness Latency p95** | **65.41 ms** | Fast, deterministic SQLite + chrono resolution |
+| **Harness Latency p50** | **0.83 ms** | Sub-millisecond harness pre-processing overhead |
+| **Harness Latency p95** | **147.7 ms** | Fast, deterministic SQLite + chrono resolution |
 
 ---
 
@@ -77,5 +84,5 @@ npm run test:evals
 
 - **Runtime**: Node.js (v22+) with native `node:sqlite` (`DatabaseSync`) for zero external C++ build dependencies and sub-millisecond query execution.
 - **Framework**: Next.js 15 (App Router) + TypeScript + Tailwind CSS.
-- **Agent Streaming**: Vercel AI SDK (`ai`, `@ai-sdk/google`) powering Google Gemini 2.0 Flash.
-- **Single Tool Contract**: `web_search({ query, since?, recency? })` backed by Tavily API with query caching keyed by `(query, since, day)`.
+- **Agent Streaming**: Vercel AI SDK (`ai`, `@ai-sdk/google`) powering Google Gemini 2.0 Flash with parallel tool executions.
+- **Single Tool Contract**: `web_search({ query, since?, recency? })` backed by Tavily API with domain quality ranking and query caching keyed by `(query, since, day)`.

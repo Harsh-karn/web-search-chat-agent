@@ -76,15 +76,26 @@ function initSchema(db: DatabaseSync): void {
 
 export function ensureUser(userId: string, timezone?: string): void {
   const db = getDb();
-  const existing = db.prepare("SELECT id FROM users WHERE id = ?").get(userId);
+  const existing = db.prepare("SELECT id, timezone FROM users WHERE id = ?").get(userId) as
+    | { id: string; timezone: string | null }
+    | undefined;
+
   if (!existing) {
     db.prepare(`
       INSERT OR REPLACE INTO users (id, created_at, timezone) 
       VALUES (?, ?, ?)
     `).run(userId, new Date().toISOString(), timezone || null);
-  } else if (timezone) {
+  } else if (timezone && timezone !== existing.timezone) {
     db.prepare(`UPDATE users SET timezone = ? WHERE id = ?`).run(timezone, userId);
   }
+}
+
+export function getUserTimezone(userId: string): string | null {
+  const db = getDb();
+  const user = db.prepare("SELECT timezone FROM users WHERE id = ?").get(userId) as
+    | { timezone: string | null }
+    | undefined;
+  return user?.timezone || null;
 }
 
 export function saveMessage(msg: {

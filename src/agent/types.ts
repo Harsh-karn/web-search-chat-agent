@@ -12,3 +12,4 @@ export interface SearchResponse {
   results: SearchResultItem[];
   error?: string;
 }
+

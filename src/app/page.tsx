@@ -28,7 +28,7 @@ export default function ChatPage() {
     }
   }, []);
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, error } = useChat({
     api: "/api/chat",
     headers: {
       "x-timezone": clientTz,
@@ -37,7 +37,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  }, [messages, isLoading, error]);
 
   const testPrompts = [
     {
@@ -179,6 +179,14 @@ export default function ChatPage() {
             <span>Analyzing time references and checking memory...</span>
           </div>
         )}
+
+        {error && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>Error: {error.message || "Failed to communicate with the agent. Please check your API keys."}</span>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </main>
 

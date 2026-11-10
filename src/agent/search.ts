@@ -5,6 +5,45 @@ const searchCache = new Map<string, { timestamp: number; data: SearchResponse }>
 const CACHE_TTL_MS = 1000 * 60 * 60 * 4; // 4 hours
 
 /**
+ * Score and rank search results based on domain authority, recency, and official paths.
+ */
+function rankSearchResults(items: SearchResultItem[], query: string): SearchResultItem[] {
+  const queryLower = query.toLowerCase();
+  const isPricingQuery = queryLower.includes("pricing") || queryLower.includes("price") || queryLower.includes("cost");
+  const isChangelogQuery = queryLower.includes("shipped") || queryLower.includes("change") || queryLower.includes("release") || queryLower.includes("update");
+
+  return [...items].sort((a, b) => {
+    let scoreA = 0;
+    let scoreB = 0;
+
+    const urlA = a.url.toLowerCase();
+    const urlB = b.url.toLowerCase();
+
+    // Boost official / canonical paths
+    if (isPricingQuery) {
+      if (urlA.includes("/pricing") || urlA.includes("/editions-pricing") || urlA.includes("/plans")) scoreA += 5;
+      if (urlB.includes("/pricing") || urlB.includes("/editions-pricing") || urlB.includes("/plans")) scoreB += 5;
+    }
+
+    if (isChangelogQuery) {
+      if (urlA.includes("/changelog") || urlA.includes("/releases") || urlA.includes("/blog/")) scoreA += 5;
+      if (urlB.includes("/changelog") || urlB.includes("/releases") || urlB.includes("/blog/")) scoreB += 5;
+    }
+
+    // Boost items with confirmed published dates
+    if (a.publishedDate) scoreA += 2;
+    if (b.publishedDate) scoreB += 2;
+
+    // Penalize known low-signal content farms / forum scraps if official docs exist
+    const lowSignalDomains = ["quora.com", "reddit.com", "pinterest.com"];
+    if (lowSignalDomains.some((d) => urlA.includes(d))) scoreA -= 3;
+    if (lowSignalDomains.some((d) => urlB.includes(d))) scoreB -= 3;
+
+    return scoreB - scoreA;
+  });
+}
+
+/**
  * Executes a web search using the Tavily API.
  * Supports date filtering via `since` and recency constraints.
  * Trims and caches results for fast, lightweight prompt injection.
@@ -90,18 +129,21 @@ export async function executeWebSearch(params: {
       }>;
     };
 
-    const items: SearchResultItem[] = (json.results || []).map((r) => ({
+    const rawItems: SearchResultItem[] = (json.results || []).map((r) => ({
       title: r.title || "Untitled",
       url: r.url || "",
       publishedDate: r.published_date || undefined,
       snippet: (r.content || "").slice(0, 300).trim(),
     }));
 
+    // Apply ranking and quality prioritization
+    const rankedItems = rankSearchResults(rawItems, query);
+
     const response: SearchResponse = {
       query,
       since,
       cached: false,
-      results: items,
+      results: rankedItems,
     };
 
     searchCache.set(cacheKey, { timestamp: Date.now(), data: response });
