@@ -2,11 +2,13 @@
 
 import { useChat } from "ai/react";
 import { useEffect, useState, useRef } from "react";
-import { Send, Search, Clock, ShieldCheck, Sparkles, AlertCircle, ExternalLink, RefreshCw } from "lucide-react";
+import { Send, Search, Clock, ShieldCheck, Sparkles, AlertCircle, ExternalLink, RefreshCw, Database } from "lucide-react";
 
 export default function ChatPage() {
   const [clientTz, setClientTz] = useState<string>("UTC");
   const [currentDateStr, setCurrentDateStr] = useState<string>("");
+  const [isSeeding, setIsSeeding] = useState<boolean>(false);
+  const [seedSuccessMsg, setSeedSuccessMsg] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,6 +40,23 @@ export default function ChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading, error]);
+
+  const handleSeedData = async () => {
+    setIsSeeding(true);
+    setSeedSuccessMsg(null);
+    try {
+      const res = await fetch("/api/seed", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setSeedSuccessMsg("✅ Seeded history: Monday (5 CRM Tools) & 3 Nov (Postgres) are now in memory!");
+        setTimeout(() => setSeedSuccessMsg(null), 8000);
+      }
+    } catch (e) {
+      console.error("Seeding failed", e);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   const testPrompts = [
     {
@@ -79,8 +98,17 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Live Context Indicators */}
-        <div className="flex items-center gap-2 text-xs">
+        {/* Live Context Indicators & Seed Button */}
+        <div className="flex items-center flex-wrap gap-2 text-xs">
+          <button
+            onClick={handleSeedData}
+            disabled={isSeeding}
+            title="Seed the evaluation challenge conversations (Monday & Nov 3) into your session"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 transition-colors font-medium cursor-pointer"
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <span>{isSeeding ? "Seeding..." : "🌱 Seed Demo History"}</span>
+          </button>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#12161f] border border-[#1e2638] text-gray-300">
             <Clock className="w-3.5 h-3.5 text-blue-400" />
             <span>{currentDateStr || "Loading..."}</span>
@@ -92,6 +120,14 @@ export default function ChatPage() {
         </div>
       </header>
 
+      {/* Seed Success Banner */}
+      {seedSuccessMsg && (
+        <div className="mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between">
+          <span>{seedSuccessMsg}</span>
+          <button onClick={() => setSeedSuccessMsg(null)} className="text-emerald-400 hover:text-white font-bold ml-2">✕</button>
+        </div>
+      )}
+
       {/* Quick Scenario Chips */}
       <div className="py-3 flex items-center gap-2 overflow-x-auto text-xs no-scrollbar">
         <span className="text-gray-500 shrink-0 font-medium">Test Queries:</span>
@@ -99,7 +135,7 @@ export default function ChatPage() {
           <button
             key={idx}
             onClick={() => setInput(item.prompt)}
-            className="shrink-0 px-3 py-1.5 rounded-lg bg-[#141a27] hover:bg-[#1a2233] text-gray-300 hover:text-white border border-[#222c42] transition-colors flex items-center gap-1.5"
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-[#141a27] hover:bg-[#1a2233] text-gray-300 hover:text-white border border-[#222c42] transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <span>{item.title}</span>
           </button>
@@ -113,10 +149,10 @@ export default function ChatPage() {
             <div className="w-12 h-12 rounded-2xl bg-[#141a27] border border-[#222c42] flex items-center justify-center text-blue-400">
               <Search className="w-6 h-6" />
             </div>
-            <div className="max-w-md space-y-1">
+            <div className="max-w-md space-y-2">
               <h2 className="text-base font-medium text-gray-200">Ready to chat</h2>
               <p className="text-xs text-gray-400">
-                Ask anything, recall prior discussions by date or day of the week, and verify what changed since.
+                To test the challenge memory queries, click <strong>"🌱 Seed Demo History"</strong> above to populate Monday (Nov 9 CRM shortlist) and Nov 3 (Postgres hosting) into your session.
               </p>
             </div>
           </div>
@@ -203,7 +239,7 @@ export default function ChatPage() {
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="absolute right-2 p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-30 disabled:hover:bg-blue-600 transition-colors"
+            className="absolute right-2 p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-30 disabled:hover:bg-blue-600 transition-colors cursor-pointer"
           >
             <Send className="w-4 h-4" />
           </button>
