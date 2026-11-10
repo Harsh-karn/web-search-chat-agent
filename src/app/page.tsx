@@ -234,9 +234,9 @@ export default function ChatPage() {
                   </div>
                 )}
 
-                {/* Message Content */}
-                <div className="whitespace-pre-wrap font-normal text-[0.93rem] leading-relaxed">
-                  {renderFormattedText(m.content)}
+                {/* Message Content with rich Markdown formatting */}
+                <div className="font-normal text-[0.93rem] leading-relaxed">
+                  {renderFormattedContent(m.content)}
                 </div>
               </div>
             </div>
@@ -283,33 +283,120 @@ export default function ChatPage() {
   );
 }
 
-// Minimal markdown link parser for citation links [Title](URL) with terracotta editorial styling
-function renderFormattedText(text: string) {
+// Markdown parser supporting tables, links, bold, and code
+function renderFormattedContent(text: string) {
   if (!text) return null;
 
-  const linkRegex = /\[(.*?)\]\((https?:\/\/[^\s)]+)\)/g;
-  const parts: (string | React.ReactNode)[] = [];
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  let tableBuffer: string[] = [];
+
+  const flushTable = () => {
+    if (tableBuffer.length === 0) return;
+    const rows = tableBuffer
+      .map((row) => row.trim())
+      .filter((row) => row.startsWith("|") && row.endsWith("|"))
+      .map((row) =>
+        row
+          .slice(1, -1)
+          .split("|")
+          .map((cell) => cell.trim())
+      );
+
+    if (rows.length >= 2) {
+      const headerRow = rows[0];
+      const dataRows = rows.slice(1).filter((r) => !r.every((c) => /^[-:]+$/.test(c)));
+
+      elements.push(
+        <div key={`tbl_${elements.length}`} className="overflow-x-auto my-3 rounded-xl border border-[rgba(120,53,15,0.2)] bg-[rgba(255,251,235,0.6)] shadow-2xs">
+          <table className="w-full text-xs text-left border-collapse">
+            <thead>
+              <tr className="border-b border-[rgba(120,53,15,0.2)] bg-[rgba(120,53,15,0.06)]">
+                {headerRow.map((cell, i) => (
+                  <th key={i} className="py-2.5 px-3.5 font-semibold text-[#1c1917] tracking-wider font-sans">
+                    {parseInlineMarkdown(cell)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[rgba(120,53,15,0.1)]">
+              {dataRows.map((row, rIdx) => (
+                <tr key={rIdx} className="hover:bg-[rgba(194,65,12,0.04)] transition-colors">
+                  {row.map((cell, cIdx) => (
+                    <td key={cIdx} className="py-2.5 px-3.5 text-[#292524] font-sans">
+                      {parseInlineMarkdown(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+    tableBuffer = [];
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim().startsWith("|") && line.trim().endsWith("|")) {
+      tableBuffer.push(line);
+    } else {
+      flushTable();
+      elements.push(
+        <p key={i} className="min-h-[1.25rem]">
+          {parseInlineMarkdown(line)}
+        </p>
+      );
+    }
+  }
+  flushTable();
+
+  return <div className="space-y-1.5">{elements}</div>;
+}
+
+function parseInlineMarkdown(text: string): React.ReactNode[] {
+  const regex = /\[(.*?)\]\((https?:\/\/[^\s)]+)\)|\*\*(.*?)\*\*|`(.*?)`/g;
+  const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match;
 
-  while ((match = linkRegex.exec(text)) !== null) {
+  while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) {
       parts.push(text.slice(lastIndex, match.index));
     }
-    const [_, title, url] = match;
-    parts.push(
-      <a
-        key={match.index}
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-0.5 text-[#c2410c] hover:text-[#9a3412] underline decoration-1 underline-offset-2 mx-0.5 font-medium transition-colors"
-      >
-        <span>{title}</span>
-        <ExternalLink className="w-3 h-3 inline text-[#b45309]" />
-      </a>
-    );
-    lastIndex = linkRegex.lastIndex;
+
+    if (match[1] !== undefined && match[2] !== undefined) {
+      // Citation Link [Title](URL)
+      parts.push(
+        <a
+          key={`lnk_${match.index}`}
+          href={match[2]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-0.5 text-[#c2410c] hover:text-[#9a3412] underline decoration-1 underline-offset-2 mx-0.5 font-medium transition-colors"
+        >
+          <span>{match[1]}</span>
+          <ExternalLink className="w-3 h-3 inline text-[#b45309]" />
+        </a>
+      );
+    } else if (match[3] !== undefined) {
+      // Bold **text**
+      parts.push(
+        <strong key={`bld_${match.index}`} className="font-semibold text-[#1c1917]">
+          {match[3]}
+        </strong>
+      );
+    } else if (match[4] !== undefined) {
+      // Inline Code `code`
+      parts.push(
+        <code key={`code_${match.index}`} className="px-1.5 py-0.5 rounded bg-[rgba(120,53,15,0.08)] text-[#c2410c] font-mono text-[0.78rem]">
+          {match[4]}
+        </code>
+      );
+    }
+
+    lastIndex = regex.lastIndex;
   }
 
   if (lastIndex < text.length) {
