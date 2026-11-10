@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Search Agent | Time-Aware Web Search Chat Agent",
-  description: "Chat agent with a single time-bounded web search tool and temporal conversation memory.",
+  description: "High-performance chat agent with a single time-bounded web search tool and temporal conversation memory.",
 };
 
 export default function RootLayout({
@@ -12,11 +12,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className="antialiased bg-[#0a0c10] text-gray-100 min-h-screen flex flex-col">
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="antialiased bg-[#fffbeb] text-[#292524] min-h-screen flex flex-col font-sans selection:bg-[#c2410c] selection:text-[#fffbeb]">
         {children}
       </body>
     </html>
   );
 }
-

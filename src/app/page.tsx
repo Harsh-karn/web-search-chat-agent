@@ -2,7 +2,7 @@
 
 import { useChat } from "ai/react";
 import { useEffect, useState, useRef } from "react";
-import { Send, Search, Clock, ShieldCheck, Sparkles, AlertCircle, ExternalLink, RefreshCw, Database } from "lucide-react";
+import { Send, Search, Clock, ShieldCheck, Sparkles, AlertCircle, ExternalLink, RefreshCw, Database, Compass, ArrowUpRight } from "lucide-react";
 
 export default function ChatPage() {
   const [clientTz, setClientTz] = useState<string>("UTC");
@@ -48,7 +48,7 @@ export default function ChatPage() {
       const res = await fetch("/api/seed", { method: "POST" });
       const data = await res.json();
       if (data.success) {
-        setSeedSuccessMsg("✅ Seeded history: Monday (5 CRM Tools) & 3 Nov (Postgres) are now in memory!");
+        setSeedSuccessMsg("✅ Seeded into memory: Monday Nov 9 (5 CRM tools) & Nov 3 (Postgres options). Click a test query to verify!");
         setTimeout(() => setSeedSuccessMsg(null), 8000);
       }
     } catch (e) {
@@ -61,41 +61,43 @@ export default function ChatPage() {
   const testPrompts = [
     {
       title: "CRM Shortlist (Monday)",
+      tag: "Recall & Parallel Search",
       prompt: "On Monday we shortlisted 5 CRM tools for a 20-person sales team. Has any of them changed pricing or shipped something big since?",
     },
     {
       title: "Recall 3 November",
+      tag: "Time-Bound Recheck",
       prompt: "What did I ask you on 3 November? Is your answer still correct today?",
     },
     {
       title: "Postgres Hosting (Last Tuesday)",
+      tag: "Relative Date Resolution",
       prompt: "Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?",
     },
     {
       title: "Missing History Check",
+      tag: "Epistemic Honesty",
       prompt: "What did I ask you on 14 October about Kubernetes clusters?",
     },
   ];
 
   return (
-    <div className="flex flex-col h-screen max-w-5xl w-full mx-auto p-4 sm:p-6">
-      {/* Top Header */}
-      <header className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#1e2638]">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-            <Sparkles className="w-5 h-5" />
+    <div className="flex flex-col h-screen max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      {/* Editorial Top Header */}
+      <header className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-[rgba(120,53,15,0.18)]">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="label-tag text-[#c2410c] tracking-[0.25em]">Autonomous Search Agent</span>
+            <span className="text-[0.65rem] uppercase tracking-[0.18em] px-2 py-0.5 rounded-full bg-[#c2410c]/10 text-[#c2410c] font-semibold border border-[#c2410c]/20">
+              1 Tool: web_search
+            </span>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight text-white flex items-center gap-2">
-              Web Search Chat Agent
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                1 Tool: web_search
-              </span>
-            </h1>
-            <p className="text-xs text-gray-400">
-              Deterministic temporal memory · Time-bounded search · Parallel execution
-            </p>
-          </div>
+          <h1 className="text-2xl sm:text-3xl font-serif text-[#1c1917] tracking-tight">
+            Web Search Chat Agent <span className="italic font-normal text-[#b45309]">with Temporal Memory</span>
+          </h1>
+          <p className="text-xs text-[#78350f]/80 font-sans mt-0.5">
+            Harness-side deterministic memory · Parallel tool calling · Epistemic honesty
+          </p>
         </div>
 
         {/* Live Context Indicators & Seed Button */}
@@ -104,17 +106,17 @@ export default function ChatPage() {
             onClick={handleSeedData}
             disabled={isSeeding}
             title="Seed the evaluation challenge conversations (Monday & Nov 3) into your session"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 transition-colors font-medium cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#1c1917] hover:bg-[#c2410c] text-[#fffbeb] transition-colors font-medium cursor-pointer shadow-sm text-xs"
           >
-            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <Database className="w-3.5 h-3.5 text-[#fffbeb]" />
             <span>{isSeeding ? "Seeding..." : "🌱 Seed Demo History"}</span>
           </button>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#12161f] border border-[#1e2638] text-gray-300">
-            <Clock className="w-3.5 h-3.5 text-blue-400" />
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[rgba(255,251,235,0.85)] border border-[rgba(120,53,15,0.22)] text-[#44403c] font-medium shadow-xs">
+            <Clock className="w-3.5 h-3.5 text-[#b45309]" />
             <span>{currentDateStr || "Loading..."}</span>
           </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#12161f] border border-[#1e2638] text-gray-400">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[rgba(255,251,235,0.85)] border border-[rgba(120,53,15,0.22)] text-[#78350f] font-medium shadow-xs">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#c2410c]" />
             <span>TZ: {clientTz}</span>
           </div>
         </div>
@@ -122,38 +124,70 @@ export default function ChatPage() {
 
       {/* Seed Success Banner */}
       {seedSuccessMsg && (
-        <div className="mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between">
-          <span>{seedSuccessMsg}</span>
-          <button onClick={() => setSeedSuccessMsg(null)} className="text-emerald-400 hover:text-white font-bold ml-2">✕</button>
+        <div className="mt-3 p-3.5 rounded-xl bg-[#fffbeb] border border-[#c2410c]/40 text-[#c2410c] text-xs flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2 font-medium">
+            <Sparkles className="w-4 h-4 text-[#c2410c] shrink-0" />
+            <span>{seedSuccessMsg}</span>
+          </div>
+          <button onClick={() => setSeedSuccessMsg(null)} className="text-[#c2410c] hover:text-[#1c1917] font-bold ml-3 cursor-pointer">✕</button>
         </div>
       )}
 
-      {/* Quick Scenario Chips */}
+      {/* Test Scenarios Ribbon */}
       <div className="py-3 flex items-center gap-2 overflow-x-auto text-xs no-scrollbar">
-        <span className="text-gray-500 shrink-0 font-medium">Test Queries:</span>
+        <span className="label-tag text-[#78350f] shrink-0 pr-1">Evaluation Prompts:</span>
         {testPrompts.map((item, idx) => (
           <button
             key={idx}
             onClick={() => setInput(item.prompt)}
-            className="shrink-0 px-3 py-1.5 rounded-lg bg-[#141a27] hover:bg-[#1a2233] text-gray-300 hover:text-white border border-[#222c42] transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="shrink-0 px-3.5 py-1.5 rounded-full bg-[rgba(255,251,235,0.8)] hover:bg-[#fffbeb] text-[#292524] hover:text-[#c2410c] border border-[rgba(120,53,15,0.2)] hover:border-[#c2410c]/50 transition-all flex items-center gap-2 cursor-pointer shadow-2xs group"
           >
-            <span>{item.title}</span>
+            <span className="font-medium">{item.title}</span>
+            <span className="text-[0.65rem] text-[#b45309] font-sans opacity-70 group-hover:opacity-100">· {item.tag}</span>
+            <ArrowUpRight className="w-3 h-3 text-[#b45309] opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
           </button>
         ))}
       </div>
 
-      {/* Chat Messages Log */}
-      <main className="flex-1 overflow-y-auto space-y-4 py-4 pr-1">
+      {/* Main Conversation Log */}
+      <main className="flex-1 overflow-y-auto space-y-5 py-4 pr-1">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-gray-400 space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#141a27] border border-[#222c42] flex items-center justify-center text-blue-400">
-              <Search className="w-6 h-6" />
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-6">
+            <div className="w-14 h-14 rounded-2xl bg-[rgba(255,251,235,0.9)] border border-[rgba(120,53,15,0.25)] flex items-center justify-center text-[#c2410c] shadow-sm">
+              <Compass className="w-7 h-7" />
             </div>
-            <div className="max-w-md space-y-2">
-              <h2 className="text-base font-medium text-gray-200">Ready to chat</h2>
-              <p className="text-xs text-gray-400">
-                To test the challenge memory queries, click <strong>"🌱 Seed Demo History"</strong> above to populate Monday (Nov 9 CRM shortlist) and Nov 3 (Postgres hosting) into your session.
+            <div className="max-w-lg space-y-2">
+              <h2 className="text-2xl font-serif text-[#1c1917] tracking-tight">
+                Answering fast, getting facts right, and good to talk to.
+              </h2>
+              <p className="text-xs text-[#78350f]/80 leading-relaxed font-sans max-w-md mx-auto">
+                Equipped with a single time-aware <code className="px-1.5 py-0.5 rounded bg-[rgba(120,53,15,0.08)] text-[#c2410c] font-mono text-[0.75rem]">web_search</code> tool. Time and memory are resolved deterministically before the model runs.
               </p>
+            </div>
+
+            {/* Feature Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl w-full text-left pt-2">
+              <div className="index-card p-4">
+                <span className="label-tag text-[#c2410c] block mb-1">01 / Temporal</span>
+                <h3 className="font-serif text-base text-[#1c1917] font-semibold">Deterministic Resolution</h3>
+                <p className="text-xs text-[#78350f]/80 mt-1">
+                  Resolves relative dates (&quot;Monday&quot;, &quot;last Tuesday&quot;) against client timezones before LLM invocation.
+                </p>
+              </div>
+              <div className="index-card p-4">
+                <span className="label-tag text-[#b45309] block mb-1">02 / Memory</span>
+                <h3 className="font-serif text-base text-[#1c1917] font-semibold">Zero-Tool Recall</h3>
+                <p className="text-xs text-[#78350f]/80 mt-1">
+                  Stored in local SQLite (<code className="text-[0.7rem] font-mono">node:sqlite</code>). Never wastes tool rounds or hallucinating facts.
+                </p>
+              </div>
+              <div className="index-card p-4">
+                <span className="label-tag text-[#c2410c] block mb-1">03 / Honesty</span>
+                <h3 className="font-serif text-base text-[#1c1917] font-semibold">Epistemic Truth</h3>
+                <p className="text-xs text-[#78350f]/80 mt-1">
+                  Strictly distinguishes: no prior history vs. searched and no change vs. no sources found.
+                </p>
+              </div>
             </div>
           </div>
         ) : (
@@ -165,33 +199,33 @@ export default function ChatPage() {
               }`}
             >
               <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                className={`max-w-[85%] rounded-2xl px-5 py-4 text-sm leading-relaxed transition-all ${
                   m.role === "user"
-                    ? "bg-blue-600 text-white"
-                    : "bg-[#12161f] border border-[#1e2638] text-gray-200 shadow-sm"
+                    ? "bg-[#1c1917] text-[#fffbeb] shadow-sm font-sans"
+                    : "index-card text-[#292524] shadow-sm font-sans"
                 }`}
               >
                 {/* Tool Invocations Status stream */}
                 {m.toolInvocations && m.toolInvocations.length > 0 && (
-                  <div className="mb-3 space-y-1.5 border-b border-[#1e2638]/80 pb-2">
+                  <div className="mb-3.5 space-y-2 border-b border-[rgba(120,53,15,0.18)] pb-3">
                     {m.toolInvocations.map((tool) => (
                       <div
                         key={tool.toolCallId}
-                        className="flex items-center gap-2 text-xs text-blue-300/90 bg-[#161c28] px-2.5 py-1 rounded-md border border-blue-500/20"
+                        className="flex items-center gap-2 text-xs text-[#78350f] bg-[rgba(255,251,235,0.9)] px-3 py-1.5 rounded-lg border border-[rgba(120,53,15,0.22)] shadow-2xs font-mono"
                       >
                         {tool.state === "result" ? (
                           <>
-                            <Search className="w-3 h-3 text-emerald-400 shrink-0" />
+                            <Search className="w-3.5 h-3.5 text-[#c2410c] shrink-0" />
                             <span>
-                              Searched: <strong>{(tool.args as any)?.query}</strong>
+                              Searched: <strong className="text-[#1c1917]">{(tool.args as any)?.query}</strong>
                               {(tool.args as any)?.since ? ` (since ${(tool.args as any).since})` : ""}
                             </span>
                           </>
                         ) : (
                           <>
-                            <RefreshCw className="w-3 h-3 text-blue-400 animate-spin shrink-0" />
+                            <RefreshCw className="w-3.5 h-3.5 text-[#b45309] animate-spin shrink-0" />
                             <span>
-                              Searching: <strong>{(tool.args as any)?.query}</strong>...
+                              Searching: <strong className="text-[#1c1917]">{(tool.args as any)?.query}</strong>...
                             </span>
                           </>
                         )}
@@ -201,7 +235,7 @@ export default function ChatPage() {
                 )}
 
                 {/* Message Content */}
-                <div className="whitespace-pre-wrap font-normal">
+                <div className="whitespace-pre-wrap font-normal text-[0.93rem] leading-relaxed">
                   {renderFormattedText(m.content)}
                 </div>
               </div>
@@ -210,14 +244,14 @@ export default function ChatPage() {
         )}
 
         {isLoading && messages[messages.length - 1]?.role === "user" && (
-          <div className="flex items-center gap-2 text-xs text-blue-400 px-3 py-2 bg-[#12161f] border border-[#1e2638] rounded-xl w-fit">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-            <span>Analyzing time references and checking memory...</span>
+          <div className="flex items-center gap-2.5 text-xs text-[#c2410c] px-4 py-2.5 bg-[rgba(255,251,235,0.95)] border border-[rgba(194,65,12,0.3)] rounded-full w-fit shadow-xs font-medium">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#c2410c]" />
+            <span>Resolving time context and querying memory...</span>
           </div>
         )}
 
         {error && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+          <div className="flex items-center gap-2 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs shadow-xs">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>Error: {error.message || "Failed to communicate with the agent. Please check your API keys."}</span>
           </div>
@@ -226,20 +260,20 @@ export default function ChatPage() {
         <div ref={messagesEndRef} />
       </main>
 
-      {/* Input Box */}
-      <footer className="pt-3 border-t border-[#1e2638]">
+      {/* Editorial Input Box */}
+      <footer className="pt-3 border-t border-[rgba(120,53,15,0.18)]">
         <form onSubmit={handleSubmit} className="relative flex items-center">
           <input
             value={input}
             onChange={handleInputChange}
             placeholder="Ask a question or recall past decisions (e.g. 'Has any CRM tool changed pricing since Monday?')"
             disabled={isLoading}
-            className="w-full bg-[#12161f] border border-[#1e2638] rounded-xl px-4 py-3 pr-12 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 transition-all"
+            className="w-full bg-[rgba(255,251,235,0.9)] border border-[rgba(120,53,15,0.25)] rounded-2xl px-5 py-3.5 pr-14 text-sm text-[#1c1917] placeholder-[#78350f]/50 focus:outline-none focus:border-[#c2410c] focus:ring-1 focus:ring-[#c2410c]/30 transition-all font-sans shadow-xs"
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="absolute right-2 p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-30 disabled:hover:bg-blue-600 transition-colors cursor-pointer"
+            className="absolute right-2 p-2.5 rounded-xl bg-[#1c1917] hover:bg-[#c2410c] text-[#fffbeb] disabled:opacity-30 disabled:hover:bg-[#1c1917] transition-all cursor-pointer shadow-xs"
           >
             <Send className="w-4 h-4" />
           </button>
@@ -249,11 +283,10 @@ export default function ChatPage() {
   );
 }
 
-// Minimal markdown link parser for citation links [Title](URL)
+// Minimal markdown link parser for citation links [Title](URL) with terracotta editorial styling
 function renderFormattedText(text: string) {
   if (!text) return null;
 
-  // Split by markdown link pattern [title](url)
   const linkRegex = /\[(.*?)\]\((https?:\/\/[^\s)]+)\)/g;
   const parts: (string | React.ReactNode)[] = [];
   let lastIndex = 0;
@@ -270,10 +303,10 @@ function renderFormattedText(text: string) {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300 underline underline-offset-2 mx-0.5 font-medium"
+        className="inline-flex items-center gap-0.5 text-[#c2410c] hover:text-[#9a3412] underline decoration-1 underline-offset-2 mx-0.5 font-medium transition-colors"
       >
         <span>{title}</span>
-        <ExternalLink className="w-3 h-3 inline" />
+        <ExternalLink className="w-3 h-3 inline text-[#b45309]" />
       </a>
     );
     lastIndex = linkRegex.lastIndex;
