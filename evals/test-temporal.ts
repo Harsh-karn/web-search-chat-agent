@@ -1,5 +1,15 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { resolveTemporal } from "../src/memory/temporal";
-import { getDb, saveMessage, getMessagesByDateRange, ensureUser, saveSources, getSourcesForMessage } from "../src/memory/db";
+import {
+  getDb,
+  saveMessage,
+  getMessagesByDateRange,
+  ensureUser,
+  saveSources,
+  getSourcesForMessage,
+} from "../src/memory/db";
 import assert from "node:assert";
 
 console.log("=== RUNNING UNIT TESTS FOR TEMPORAL RESOLVER & DB ===");
@@ -9,10 +19,13 @@ const refDate = new Date("2026-11-10T12:00:00.000Z");
 
 // Test 1: "On Monday we shortlisted 5 CRM tools"
 {
-  const res = resolveTemporal("On Monday we shortlisted 5 CRM tools. Has any of them changed pricing since?", {
-    referenceDate: refDate,
-    timezone: "UTC",
-  });
+  const res = resolveTemporal(
+    "On Monday we shortlisted 5 CRM tools. Has any of them changed pricing since?",
+    {
+      referenceDate: refDate,
+      timezone: "UTC",
+    },
+  );
   console.log("Test 1 Result:", res);
   assert.strictEqual(res.hasTemporalReference, true);
   assert.strictEqual(res.isSinceQuery, true);
@@ -24,10 +37,13 @@ const refDate = new Date("2026-11-10T12:00:00.000Z");
 
 // Test 2: "What did I ask you on 3 November?"
 {
-  const res = resolveTemporal("What did I ask you on 3 November? Is your answer still correct today?", {
-    referenceDate: refDate,
-    timezone: "UTC",
-  });
+  const res = resolveTemporal(
+    "What did I ask you on 3 November? Is your answer still correct today?",
+    {
+      referenceDate: refDate,
+      timezone: "UTC",
+    },
+  );
   console.log("Test 2 Result:", res);
   assert.strictEqual(res.hasTemporalReference, true);
   assert.ok(res.range);
@@ -36,10 +52,13 @@ const refDate = new Date("2026-11-10T12:00:00.000Z");
 
 // Test 3: "Last Tuesday I asked you about Postgres hosting"
 {
-  const res = resolveTemporal("Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?", {
-    referenceDate: refDate,
-    timezone: "UTC",
-  });
+  const res = resolveTemporal(
+    "Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?",
+    {
+      referenceDate: refDate,
+      timezone: "UTC",
+    },
+  );
   console.log("Test 3 Result:", res);
   assert.strictEqual(res.hasTemporalReference, true);
   assert.strictEqual(res.isSinceQuery, true);
@@ -51,7 +70,10 @@ const refDate = new Date("2026-11-10T12:00:00.000Z");
 
 // Test 4: Database operations with built-in node:sqlite
 {
-  process.env.DATABASE_PATH = "./data/test_eval.db";
+  process.env.DATABASE_PATH = join(
+    mkdtempSync(join(tmpdir(), "temporal-test-")),
+    "test.db",
+  );
   const testUserId = "user_test_123";
   ensureUser(testUserId, "America/New_York");
 
@@ -69,7 +91,8 @@ const refDate = new Date("2026-11-10T12:00:00.000Z");
     id: "msg_nov3_ans",
     userId: testUserId,
     role: "assistant",
-    content: "Recommended options: Supabase ($25/mo), Neon ($19/mo), AWS RDS ($15/mo).",
+    content:
+      "Recommended options: Supabase ($25/mo), Neon ($19/mo), AWS RDS ($15/mo).",
     createdAt: "2026-11-03T14:30:15.000Z",
   });
 
@@ -85,7 +108,7 @@ const refDate = new Date("2026-11-10T12:00:00.000Z");
   const rows = getMessagesByDateRange(
     testUserId,
     "2026-11-03T00:00:00.000Z",
-    "2026-11-03T23:59:59.999Z"
+    "2026-11-03T23:59:59.999Z",
   );
   console.log("Test 4 DB Messages Found:", rows.length);
   assert.strictEqual(rows.length, 2);
@@ -97,4 +120,3 @@ const refDate = new Date("2026-11-10T12:00:00.000Z");
 }
 
 console.log("ALL TEMPORAL & DB UNIT TESTS PASSED SUCCESSFULLY! ✅");
-

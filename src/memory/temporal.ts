@@ -1,11 +1,9 @@
 import * as chrono from "chrono-node";
-
 export interface DateRange {
   startIso: string;
   endIso: string;
   label: string;
 }
-
 export interface TemporalResolution {
   hasTemporalReference: boolean;
   rawText?: string;
@@ -14,66 +12,75 @@ export interface TemporalResolution {
   isSinceQuery: boolean;
   assumedTimezone: string;
 }
-
-/**
- * Resolves temporal references (e.g., "Monday", "last Tuesday", "3 November")
- * deterministically against a reference date and client timezone.
- */
+export function validTimezone(tz: string) {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: tz }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+function offset(date: Date, tz: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
+  return (
+    (Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) -
+      Math.floor(+date / 1000) * 1000) /
+    60000
+  );
+}
+function midnight(y: number, m: number, d: number, tz: string) {
+  const wall = Date.UTC(y, m - 1, d);
+  let instant = wall;
+  for (let i = 0; i < 4; i++)
+    instant = wall - offset(new Date(instant), tz) * 60000;
+  return instant;
+}
 export function resolveTemporal(
   text: string,
-  options?: {
-    referenceDate?: Date;
-    timezone?: string;
-  }
+  options?: { referenceDate?: Date; timezone?: string },
 ): TemporalResolution {
-  const refDate = options?.referenceDate || new Date();
+  const ref = options?.referenceDate || new Date();
   const tz = options?.timezone || process.env.DEFAULT_TIMEZONE || "UTC";
-
-  // Check if query is looking for changes "since" a date or event
-  const sinceRegex = /\b(since|changed\s+since|updated\s+since|pricing\s+changed|any\s+of\s+them\s+changed)\b/i;
-  const isSinceQuery = sinceRegex.test(text);
-
-  // Chrono parse with backward preference (forwardDate: false) because recall queries refer to past events
-  const parsed = chrono.parse(text, refDate, { forwardDate: false });
-
-  if (!parsed || parsed.length === 0) {
-    return {
-      hasTemporalReference: false,
-      isSinceQuery,
-      assumedTimezone: tz,
-    };
-  }
-
-  // Use the most salient parsed temporal token (first match)
-  const first = parsed[0];
-  const startDate = first.start.date();
-  const rawText = first.text;
-
-  // Compute full-day boundary for the resolved date in UTC / local representation
-  // For queries like "on Monday" or "3 November", we want [YYYY-MM-DD 00:00:00, YYYY-MM-DD 23:59:59.999]
-  const year = startDate.getFullYear();
-  const month = String(startDate.getMonth() + 1).padStart(2, "0");
-  const day = String(startDate.getDate()).padStart(2, "0");
-
-  const dayStart = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
-  const dayEnd = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
-
-  const range: DateRange = {
-    startIso: dayStart.toISOString(),
-    endIso: dayEnd.toISOString(),
-    label: `${year}-${month}-${day}`,
-  };
-
-  // If this is a "since X" query, sinceIso is the start of that day or turn
-  const sinceIso = dayStart.toISOString();
-
-  return {
-    hasTemporalReference: true,
-    rawText,
-    range,
-    sinceIso,
-    isSinceQuery,
+  if (!validTimezone(tz)) throw new Error("Invalid timezone");
+  const base = {
+    hasTemporalReference: false,
+    isSinceQuery: /\bsince\b|pricing changed/i.test(text),
     assumedTimezone: tz,
   };
+  const parsed = chrono.parse(
+    text,
+    { instant: ref, timezone: offset(ref, tz) },
+    { forwardDate: false },
+  );
+  if (!parsed.length) return base;
+  const first = parsed[0];
+  const end = first.end || first.start;
+  const y = first.start.get("year")!,
+    m = first.start.get("month")!,
+    d = first.start.get("day")!;
+  const start = midnight(y, m, d, tz);
+  const finish =
+    midnight(end.get("year")!, end.get("month")!, end.get("day")! + 1, tz) - 1;
+  const label = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  return {
+    ...base,
+    hasTemporalReference: true,
+    rawText: first.text,
+    range: {
+      startIso: new Date(start).toISOString(),
+      endIso: new Date(finish).toISOString(),
+      label,
+    },
+    sinceIso: new Date(start).toISOString(),
+  };
 }
-

@@ -1,9 +1,10 @@
-import { ensureUser, saveMessage, saveSources } from "../src/memory/db";
+import { ensureUser, saveMessage, saveSources, getDb } from "../src/memory/db";
 
 export const EVAL_USER_ID = "user_eval_dataset";
 
 export function seedEvalData(targetUserId: string = EVAL_USER_ID) {
   ensureUser(targetUserId, "UTC");
+  getDb().prepare("DELETE FROM messages WHERE user_id = ?").run(targetUserId);
 
   // Turn 1: 3 November 2026 - Postgres Hosting Discussion
   const msgNov3User = `msg_${targetUserId}_nov3_user`;
@@ -13,7 +14,8 @@ export function seedEvalData(targetUserId: string = EVAL_USER_ID) {
     id: msgNov3User,
     userId: targetUserId,
     role: "user",
-    content: "What are the best Postgres hosting options for a high-availability production app?",
+    content:
+      "What are the best Postgres hosting options for a high-availability production app?",
     createdAt: "2026-11-03T10:15:00.000Z",
   });
 
@@ -49,7 +51,8 @@ export function seedEvalData(targetUserId: string = EVAL_USER_ID) {
     id: msgMonUser,
     userId: targetUserId,
     role: "user",
-    content: "We need to shortlist 5 CRM tools for a 20-person sales team. What are the best options?",
+    content:
+      "We need to shortlist 5 CRM tools for a 20-person sales team. What are the best options?",
     createdAt: "2026-11-09T14:00:00.000Z",
   });
 

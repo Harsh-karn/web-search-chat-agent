@@ -1,160 +1,198 @@
+import { z } from "zod";
 import { SearchResponse, SearchResultItem } from "./types";
-
-// In-memory cache keyed by `${query}::${since}::${today}`
-const searchCache = new Map<string, { timestamp: number; data: SearchResponse }>();
-const CACHE_TTL_MS = 1000 * 60 * 60 * 4; // 4 hours
-
-/**
- * Score and rank search results based on domain authority, recency, and official paths.
- */
-function rankSearchResults(items: SearchResultItem[], query: string): SearchResultItem[] {
-  const queryLower = query.toLowerCase();
-  const isPricingQuery = queryLower.includes("pricing") || queryLower.includes("price") || queryLower.includes("cost");
-  const isChangelogQuery = queryLower.includes("shipped") || queryLower.includes("change") || queryLower.includes("release") || queryLower.includes("update");
-
-  return [...items].sort((a, b) => {
-    let scoreA = 0;
-    let scoreB = 0;
-
-    const urlA = a.url.toLowerCase();
-    const urlB = b.url.toLowerCase();
-
-    // Boost official / canonical paths
-    if (isPricingQuery) {
-      if (urlA.includes("/pricing") || urlA.includes("/editions-pricing") || urlA.includes("/plans")) scoreA += 5;
-      if (urlB.includes("/pricing") || urlB.includes("/editions-pricing") || urlB.includes("/plans")) scoreB += 5;
-    }
-
-    if (isChangelogQuery) {
-      if (urlA.includes("/changelog") || urlA.includes("/releases") || urlA.includes("/blog/")) scoreA += 5;
-      if (urlB.includes("/changelog") || urlB.includes("/releases") || urlB.includes("/blog/")) scoreB += 5;
-    }
-
-    // Boost items with confirmed published dates
-    if (a.publishedDate) scoreA += 2;
-    if (b.publishedDate) scoreB += 2;
-
-    // Penalize known low-signal content farms / forum scraps if official docs exist
-    const lowSignalDomains = ["quora.com", "reddit.com", "pinterest.com"];
-    if (lowSignalDomains.some((d) => urlA.includes(d))) scoreA -= 3;
-    if (lowSignalDomains.some((d) => urlB.includes(d))) scoreB -= 3;
-
-    return scoreB - scoreA;
-  });
-}
-
-/**
- * Executes a web search using the Tavily API.
- * Supports date filtering via `since` and recency constraints.
- * Trims and caches results for fast, lightweight prompt injection.
- */
-export async function executeWebSearch(params: {
-  query: string;
-  since?: string;
-  recency?: "day" | "week" | "month" | "year";
-  maxResults?: number;
-}): Promise<SearchResponse> {
-  const { query, since, recency, maxResults = 5 } = params;
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const cacheKey = `${query.trim().toLowerCase()}::${since || ""}::${recency || ""}::${todayStr}`;
-
-  // Check cache
-  const cached = searchCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return { ...cached.data, cached: true };
-  }
-
-  const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) {
-    return {
-      query,
-      since,
-      cached: false,
-      results: [],
-      error: "TAVILY_API_KEY is not configured in environment.",
-    };
-  }
-
+const date = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(
+    (s) =>
+      !isNaN(Date.parse(s)) && new Date(s).toISOString().slice(0, 10) === s,
+  );
+export const searchSchema = z.object({
+  query: z.string().trim().min(1).max(500),
+  since: date.optional(),
+  recency: z.enum(["day", "week", "month", "year"]).optional(),
+  maxResults: z.number().int().min(1).max(8).default(5),
+});
+const responseSchema = z.object({
+  results: z
+    .array(
+      z.object({
+        title: z.string().default("Untitled"),
+        url: z.string(),
+        content: z.string(),
+        published_date: z.string().nullish(),
+        score: z.number().optional(),
+      }),
+    )
+    .max(100),
+});
+export function canonicalUrl(value: string): string | undefined {
   try {
-    // Determine time filtering
-    let days: number | undefined;
-    if (since) {
-      const sinceDate = new Date(since);
-      if (!isNaN(sinceDate.getTime())) {
-        const diffMs = Date.now() - sinceDate.getTime();
-        days = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-      }
-    }
-
-    const payload: Record<string, unknown> = {
-      api_key: apiKey,
-      query,
-      search_depth: "basic",
-      include_answer: false,
-      include_raw_content: false,
-      max_results: maxResults,
-    };
-
-    if (days !== undefined && days <= 365) {
-      payload.days = days;
-    } else if (recency) {
-      payload.time_range = recency;
-    }
-
-    const res = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      return {
-        query,
-        since,
-        cached: false,
-        results: [],
-        error: `Tavily API error (${res.status}): ${errText}`,
-      };
-    }
-
-    const json = (await res.json()) as {
-      results?: Array<{
-        title?: string;
-        url?: string;
-        published_date?: string;
-        content?: string;
-      }>;
-    };
-
-    const rawItems: SearchResultItem[] = (json.results || []).map((r) => ({
-      title: r.title || "Untitled",
-      url: r.url || "",
-      publishedDate: r.published_date || undefined,
-      snippet: (r.content || "").slice(0, 300).trim(),
-    }));
-
-    // Apply ranking and quality prioritization
-    const rankedItems = rankSearchResults(rawItems, query);
-
-    const response: SearchResponse = {
-      query,
-      since,
-      cached: false,
-      results: rankedItems,
-    };
-
-    searchCache.set(cacheKey, { timestamp: Date.now(), data: response });
-    return response;
-  } catch (err) {
-    return {
-      query,
-      since,
-      cached: false,
-      results: [],
-      error: err instanceof Error ? err.message : String(err),
-    };
+    const u = new URL(value);
+    if (!["https:", "http:"].includes(u.protocol) || u.username || u.password)
+      return;
+    u.hash = "";
+    for (const key of [...u.searchParams.keys()])
+      if (/^utm_|^(fbclid|gclid)$/.test(key)) u.searchParams.delete(key);
+    return u.href;
+  } catch {
+    return;
   }
 }
+export function createSearchService(
+  deps: {
+    fetch?: typeof fetch;
+    now?: () => number;
+    apiKey?: () => string | undefined;
+  } = {},
+) {
+  const request = deps.fetch || fetch,
+    now = deps.now || Date.now;
+  const cache = new Map<string, { expires: number; data: SearchResponse }>();
+  const pending = new Map<string, Promise<SearchResponse>>();
+  let active = 0;
+  const queue: Array<() => void> = [];
+  async function limited<T>(fn: () => Promise<T>): Promise<T> {
+    if (active >= 3) await new Promise<void>((r) => queue.push(r));
+    else active++;
+    try {
+      return await fn();
+    } finally {
+      const next = queue.shift();
+      if (next) next();
+      else active--;
+    }
+  }
+  return async (
+    input: z.input<typeof searchSchema>,
+    signal?: AbortSignal,
+  ): Promise<SearchResponse> => {
+    const p = searchSchema.parse(input);
+    const key = JSON.stringify({
+      ...p,
+      query: p.query.toLowerCase().replace(/\s+/g, " "),
+    });
+    for (const [k, v] of cache) if (v.expires <= now()) cache.delete(k);
+    const hit = cache.get(key);
+    if (hit) return { ...hit.data, cached: true };
+    const failure = (error: string): SearchResponse => ({
+      query: p.query,
+      since: p.since,
+      cached: false,
+      results: [],
+      error,
+    });
+    if (signal?.aborted) return failure("cancelled");
+    if (!pending.has(key)) {
+      if (pending.size >= 30) return failure("busy");
+      const job = limited(async () => {
+        const apiKey = deps.apiKey?.() || process.env.TAVILY_API_KEY;
+        if (!apiKey) return failure("unavailable");
+        const deadline = AbortSignal.timeout(8000);
+        try {
+          let res: Response | undefined;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            res = await request(
+              process.env.TAVILY_BASE_URL || "https://api.tavily.com/search",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                signal: deadline,
+                body: JSON.stringify({
+                  api_key: apiKey,
+                  query: p.query,
+                  search_depth: "basic",
+                  include_answer: false,
+                  include_raw_content: false,
+                  include_published_date: true,
+                  max_results: p.maxResults,
+                  ...(p.since
+                    ? { start_date: p.since }
+                    : p.recency
+                      ? { time_range: p.recency }
+                      : {}),
+                }),
+              },
+            );
+            if (
+              res.ok ||
+              !(res.status === 429 || res.status >= 500) ||
+              attempt === 1
+            )
+              break;
+            const wait = Math.min(
+              1000,
+              Math.max(200, Number(res.headers.get("retry-after") || 0) * 1000),
+            );
+            await new Promise((r) => setTimeout(r, wait));
+          }
+          if (!res?.ok) return failure(`provider_${res?.status || "error"}`);
+          const data = responseSchema.parse(await res.json());
+          const seen = new Set<string>();
+          const ranked = data.results.sort(
+            (a, b) => (b.score || 0) - (a.score || 0),
+          );
+          const results: SearchResultItem[] = [];
+          for (const r of ranked) {
+            const url = canonicalUrl(r.url);
+            if (
+              !url ||
+              seen.has(url) ||
+              !r.content.trim() ||
+              (r.score !== undefined && r.score < 0.2)
+            )
+              continue;
+            seen.add(url);
+            results.push({
+              url,
+              title: r.title.slice(0, 200),
+              snippet: r.content.trim().slice(0, 1200),
+              publishedDate:
+                r.published_date && !isNaN(Date.parse(r.published_date))
+                  ? r.published_date
+                  : undefined,
+              retrievedAt: new Date(now()).toISOString(),
+            });
+            if (results.length >= p.maxResults) break;
+          }
+          const result: SearchResponse = {
+            query: p.query,
+            since: p.since,
+            cached: false,
+            results,
+          };
+          if (results.length) {
+            if (cache.size >= 256) cache.delete(cache.keys().next().value!);
+            cache.set(key, {
+              expires:
+                now() +
+                (/price|pricing|today|latest|news/i.test(p.query)
+                  ? 300000
+                  : 3600000),
+              data: result,
+            });
+          }
+          return result;
+        } catch {
+          return failure(
+            deadline.aborted ? "timeout" : "invalid_or_unavailable",
+          );
+        }
+      });
+      pending.set(key, job);
+      void job.finally(() => pending.delete(key));
+    }
+    // Shared fetch owns its deadline; one disconnected subscriber cannot cancel others.
+    const job = pending.get(key)!;
+    if (!signal) return job;
+    return new Promise<SearchResponse>((resolve) => {
+      const abort = () => resolve(failure("cancelled"));
+      signal.addEventListener("abort", abort, { once: true });
+      job
+        .then(resolve)
+        .finally(() => signal.removeEventListener("abort", abort));
+      if (signal.aborted) abort();
+    });
+  };
+}
+export const executeWebSearch = createSearchService();

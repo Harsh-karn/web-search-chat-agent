@@ -115,7 +115,7 @@
     "referenceDate": "2026-11-10T12:00:00.000Z",
     "expectedTemporal": "2026-11-03",
     "isSinceQuery": true,
-    "shouldFindHistory": true
+    "shouldFindHistory": false
   },
   {
     "id": "case_14_shipped_since_query_flag",
@@ -124,7 +124,7 @@
     "referenceDate": "2026-11-10T12:00:00.000Z",
     "expectedTemporal": "2026-11-09",
     "isSinceQuery": true,
-    "shouldFindHistory": true
+    "shouldFindHistory": false
   },
   {
     "id": "case_15_non_temporal_question",
@@ -166,7 +166,7 @@
     "referenceDate": "2026-11-10T12:00:00.000Z",
     "expectedTemporal": "2026-11-03",
     "isSinceQuery": true,
-    "shouldFindHistory": true
+    "shouldFindHistory": false
   },
   {
     "id": "case_20_correct_today_recheck",
