@@ -8,10 +8,7 @@ import {
 import { resolveTemporal, TemporalResolution } from "./temporal";
 
 export type RetrievalStatus =
-  | "FOUND"
-  | "NO_HISTORY_FOUND"
-  | "FOUND_BY_KEYWORD"
-  | "NONE";
+  "FOUND" | "NO_HISTORY_FOUND" | "FOUND_BY_KEYWORD" | "NONE";
 
 export interface RetrievedTurn {
   message: MessageRecord;
@@ -28,12 +25,55 @@ export interface RetrievalResult {
 }
 
 const TEMPORAL_AND_STOP_WORDS = new Set([
-  "the", "was", "did", "what", "that", "this", "asked", "tell",
-  "about", "with", "from", "have", "we", "our", "for", "and",
-  "you", "earlier", "tool", "tools", "can", "how", "why", "who",
-  "today", "yesterday", "tomorrow", "still", "correct", "any", "them", "since",
-  "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-  "november", "october", "december", "january", "february", "march",
+  "the",
+  "was",
+  "did",
+  "what",
+  "that",
+  "this",
+  "asked",
+  "tell",
+  "about",
+  "with",
+  "from",
+  "have",
+  "we",
+  "our",
+  "for",
+  "and",
+  "you",
+  "earlier",
+  "tool",
+  "tools",
+  "can",
+  "how",
+  "why",
+  "who",
+  "today",
+  "yesterday",
+  "tomorrow",
+  "still",
+  "correct",
+  "any",
+  "them",
+  "since",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+  "previously",
+  "discussed",
+  "question",
+  "ask",
+  "november",
+  "october",
+  "december",
+  "january",
+  "february",
+  "march",
 ]);
 
 export function retrieveHistory(
@@ -42,15 +82,27 @@ export function retrieveHistory(
   options?: {
     referenceDate?: Date;
     timezone?: string;
-  }
+  },
 ): RetrievalResult {
   const temporal = resolveTemporal(userMessage, options);
+  const recall =
+    /\b(did i ask|did we ask|asked|discussed|shortlisted|mentioned|previously|earlier|decide|decided|talk|answer|sources did you cite)\b/i.test(
+      userMessage,
+    );
+  if (!recall) return { status: "NONE", temporal, turns: [] };
 
   // Extract explicit topic if user specified "about X" or "regarding X", ignoring date terms
-  const topicMatch = userMessage.match(
-    /\b(?:about|regarding|discussing)\s+([a-zA-Z0-9\s_-]+?)(?:\?|\.|\,|$|\b(?:has|did|is|have)\b)/i
-  );
-  let explicitTopic: string | undefined = topicMatch ? topicMatch[1].trim().toLowerCase() : undefined;
+  const topicMatch = userMessage
+    .replace(temporal.rawText || "\0", "")
+    .match(
+      /\b(?:about|regarding|discussing)\s+([a-zA-Z0-9\s_-]+?)(?:\?|\.|\,|$|\b(?:has|did|is|have)\b)/i,
+    );
+  let explicitTopic: string | undefined = topicMatch
+    ? topicMatch[1]
+        .trim()
+        .toLowerCase()
+        .replace(/\s+(on|since|from)$/, "")
+    : undefined;
   if (explicitTopic && TEMPORAL_AND_STOP_WORDS.has(explicitTopic)) {
     explicitTopic = undefined;
   }
@@ -60,27 +112,28 @@ export function retrieveHistory(
     const rawMessages = getMessagesByDateRange(
       userId,
       temporal.range.startIso,
-      temporal.range.endIso
+      temporal.range.endIso,
     );
 
     if (rawMessages.length > 0) {
       const turns: RetrievedTurn[] = rawMessages.map((msg) => ({
         message: msg,
-        sources: msg.role === "assistant" ? getSourcesForMessage(msg.id) : undefined,
+        sources:
+          msg.role === "assistant" ? getSourcesForMessage(msg.id) : undefined,
       }));
 
       // If an explicit non-temporal topic was specified (e.g. "about vector search"), check if turns match
       let topicMatched = true;
       if (explicitTopic && explicitTopic.length > 2) {
         topicMatched = turns.some((t) =>
-          t.message.content.toLowerCase().includes(explicitTopic!)
+          t.message.content.toLowerCase().includes(explicitTopic!),
         );
       }
 
       return {
         status: "FOUND",
         temporal,
-        turns,
+        turns: topicMatched ? turns : [],
         topicFilter: explicitTopic,
         topicMatched,
         explanation: topicMatched
@@ -107,7 +160,7 @@ export function retrieveHistory(
     /discussed earlier/i,
   ];
 
-  const isRecallQuery = recallPatterns.some((pattern) => pattern.test(userMessage));
+  const isRecallQuery = recall;
 
   if (isRecallQuery) {
     const candidateWords = userMessage
@@ -116,13 +169,16 @@ export function retrieveHistory(
       .split(/\s+/)
       .filter((w) => w.length >= 3 && !TEMPORAL_AND_STOP_WORDS.has(w));
 
-    const searchTerms = explicitTopic ? [explicitTopic, ...candidateWords] : candidateWords;
+    const searchTerms = explicitTopic
+      ? [explicitTopic, ...candidateWords]
+      : candidateWords;
     for (const word of searchTerms) {
       const matches = getMessagesByKeyword(userId, word, 5);
       if (matches.length > 0) {
         const turns: RetrievedTurn[] = matches.map((msg) => ({
           message: msg,
-          sources: msg.role === "assistant" ? getSourcesForMessage(msg.id) : undefined,
+          sources:
+            msg.role === "assistant" ? getSourcesForMessage(msg.id) : undefined,
         }));
 
         return {
@@ -138,7 +194,7 @@ export function retrieveHistory(
   }
 
   return {
-    status: "NONE",
+    status: "NO_HISTORY_FOUND",
     temporal,
     turns: [],
   };

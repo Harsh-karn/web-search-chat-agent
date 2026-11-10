@@ -3,6 +3,7 @@ export interface SearchResultItem {
   url: string;
   publishedDate?: string;
   snippet: string;
+  retrievedAt?: string;
 }
 
 export interface SearchResponse {
@@ -12,4 +13,3 @@ export interface SearchResponse {
   results: SearchResultItem[];
   error?: string;
 }
-

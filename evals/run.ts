@@ -1,3 +1,9 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+process.env.DATABASE_PATH = path.join(
+  mkdtempSync(path.join(tmpdir(), "agent-evals-")),
+  "eval.db",
+);
 import fs from "node:fs";
 import path from "node:path";
 import { resolveTemporal } from "../src/memory/temporal";
@@ -94,8 +100,8 @@ async function runEvals() {
     if (!c.shouldFindHistory) {
       honestPass =
         prompt.includes("[SIGNAL: NO_HISTORY_FOUND]") ||
-        prompt.includes("no mention of") ||
-        prompt.includes("No specific historical context");
+        prompt.includes("No matching topic") ||
+        prompt.includes("[SIGNAL: NONE]");
     } else {
       honestPass = prompt.includes("[SIGNAL: HISTORY_FOUND]");
     }
@@ -117,7 +123,7 @@ async function runEvals() {
     console.log(
       `[${c.id}] Temporal: ${tempPass ? "PASS" : "FAIL"} | Retrieval: ${
         retPass ? "PASS" : "FAIL"
-      } | Honesty Signal: ${honestPass ? "PASS" : "FAIL"} (${latencyMs}ms)`
+      } | Honesty Signal: ${honestPass ? "PASS" : "FAIL"} (${latencyMs}ms)`,
     );
   }
 
@@ -135,13 +141,25 @@ async function runEvals() {
   console.log("EVALUATION RESULTS SUMMARY");
   console.log("=================================================");
   console.log(`Total Cases: ${total}`);
-  console.log(`Correct Date Resolution: ${temporalCorrect}/${total} (${temporalRate}%)`);
-  console.log(`Correct Recall / Refusal: ${recallRefusalCorrect}/${total} (${recallRate}%)`);
-  console.log(`Honest Outcome Signal Verification: ${honestWordingCorrect}/${total} (${honestyRate}%)`);
+  console.log(
+    `Correct Date Resolution: ${temporalCorrect}/${total} (${temporalRate}%)`,
+  );
+  console.log(
+    `History Selection: ${recallRefusalCorrect}/${total} (${recallRate}%)`,
+  );
+  console.log(
+    `Prompt Memory Signal Verification: ${honestWordingCorrect}/${total} (${honestyRate}%)`,
+  );
   console.log(`Harness Latency p50: ${p50} ms`);
   console.log(`Harness Latency p95: ${p95} ms`);
   console.log("=================================================\n");
 
+  if (
+    temporalCorrect !== total ||
+    recallRefusalCorrect !== total ||
+    honestWordingCorrect !== total
+  )
+    process.exitCode = 1;
   return {
     total,
     temporalRate: `${temporalRate}% (${temporalCorrect}/${total})`,

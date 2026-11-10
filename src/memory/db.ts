@@ -18,6 +18,8 @@ export interface SourceRecord {
   url: string;
   title: string;
   published_at?: string | null;
+  snippet?: string | null;
+  retrieved_at?: string | null;
 }
 
 export function getDb(): DatabaseSync {
@@ -36,7 +38,21 @@ export function getDb(): DatabaseSync {
   dbInstance.exec("PRAGMA journal_mode = WAL;");
   dbInstance.exec("PRAGMA foreign_keys = ON;");
 
+  dbInstance.exec("PRAGMA busy_timeout = 2000;");
   initSchema(dbInstance);
+  const columns = dbInstance
+    .prepare("PRAGMA table_info(answer_sources)")
+    .all() as unknown as { name: string }[];
+  for (const name of ["snippet", "retrieved_at"])
+    if (!columns.some((c) => c.name === name))
+      dbInstance.exec(`ALTER TABLE answer_sources ADD COLUMN ${name} TEXT`);
+  const messageColumns = dbInstance
+    .prepare("PRAGMA table_info(messages)")
+    .all() as unknown as { name: string }[];
+  if (!messageColumns.some((c) => c.name === "status"))
+    dbInstance.exec(
+      "ALTER TABLE messages ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'",
+    );
   return dbInstance;
 }
 
@@ -76,25 +92,30 @@ function initSchema(db: DatabaseSync): void {
 
 export function ensureUser(userId: string, timezone?: string): void {
   const db = getDb();
-  const existing = db.prepare("SELECT id, timezone FROM users WHERE id = ?").get(userId) as
-    | { id: string; timezone: string | null }
-    | undefined;
+  const existing = db
+    .prepare("SELECT id, timezone FROM users WHERE id = ?")
+    .get(userId) as { id: string; timezone: string | null } | undefined;
 
   if (!existing) {
-    db.prepare(`
-      INSERT OR REPLACE INTO users (id, created_at, timezone) 
+    db.prepare(
+      `
+      INSERT INTO users (id, created_at, timezone)
       VALUES (?, ?, ?)
-    `).run(userId, new Date().toISOString(), timezone || null);
+    `,
+    ).run(userId, new Date().toISOString(), timezone || null);
   } else if (timezone && timezone !== existing.timezone) {
-    db.prepare(`UPDATE users SET timezone = ? WHERE id = ?`).run(timezone, userId);
+    db.prepare(`UPDATE users SET timezone = ? WHERE id = ?`).run(
+      timezone,
+      userId,
+    );
   }
 }
 
 export function getUserTimezone(userId: string): string | null {
   const db = getDb();
-  const user = db.prepare("SELECT timezone FROM users WHERE id = ?").get(userId) as
-    | { timezone: string | null }
-    | undefined;
+  const user = db
+    .prepare("SELECT timezone FROM users WHERE id = ?")
+    .get(userId) as { timezone: string | null } | undefined;
   return user?.timezone || null;
 }
 
@@ -104,15 +125,25 @@ export function saveMessage(msg: {
   role: "user" | "assistant";
   content: string;
   createdAt?: string;
+  status?: "pending" | "completed" | "failed";
 }): void {
   const db = getDb();
   ensureUser(msg.userId);
 
   const createdAt = msg.createdAt || new Date().toISOString();
-  db.prepare(`
-    INSERT OR REPLACE INTO messages (id, user_id, role, content, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(msg.id, msg.userId, msg.role, msg.content, createdAt);
+  db.prepare(
+    `
+    INSERT INTO messages (id, user_id, role, content, created_at, status)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `,
+  ).run(
+    msg.id,
+    msg.userId,
+    msg.role,
+    msg.content,
+    createdAt,
+    msg.status || "completed",
+  );
 }
 
 export function saveSources(
@@ -122,26 +153,37 @@ export function saveSources(
     url: string;
     title: string;
     publishedAt?: string | null;
-  }>
+    snippet?: string;
+    retrievedAt?: string;
+  }>,
 ): void {
   if (sources.length === 0) return;
   const db = getDb();
 
   const insert = db.prepare(`
-    INSERT OR REPLACE INTO answer_sources (id, message_id, url, title, published_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO answer_sources (id, message_id, url, title, published_at, snippet, retrieved_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const row of sources) {
-    const id = row.id || `src_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    insert.run(id, row.messageId, row.url, row.title, row.publishedAt || null);
+    const id =
+      row.id || `src_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    insert.run(
+      id,
+      row.messageId,
+      row.url,
+      row.title,
+      row.publishedAt || null,
+      row.snippet || null,
+      row.retrievedAt || null,
+    );
   }
 }
 
 export function getMessagesByDateRange(
   userId: string,
   startIso: string,
-  endIso: string
+  endIso: string,
 ): MessageRecord[] {
   const db = getDb();
   const rows = db
@@ -149,18 +191,20 @@ export function getMessagesByDateRange(
       `
     SELECT id, user_id, role, content, created_at
     FROM messages
-    WHERE user_id = ? AND created_at >= ? AND created_at <= ?
-    ORDER BY created_at ASC
-  `
+    WHERE (user_id = ? OR user_id LIKE ?) AND status = 'completed' AND created_at >= ? AND created_at <= ?
+    ORDER BY created_at DESC LIMIT 40
+  `,
     )
-    .all(userId, startIso, endIso);
-  return rows as unknown as MessageRecord[];
+    .all(userId, recallScope(userId), startIso, endIso);
+  return (rows as unknown as MessageRecord[]).sort((a, b) =>
+    a.created_at.localeCompare(b.created_at),
+  );
 }
 
 export function getMessagesByKeyword(
   userId: string,
   keyword: string,
-  limit: number = 10
+  limit: number = 10,
 ): MessageRecord[] {
   const db = getDb();
   const rows = db
@@ -168,13 +212,15 @@ export function getMessagesByKeyword(
       `
     SELECT id, user_id, role, content, created_at
     FROM messages
-    WHERE user_id = ? AND content LIKE ?
+    WHERE (user_id = ? OR user_id LIKE ?) AND status = 'completed' AND content LIKE ?
     ORDER BY created_at DESC
     LIMIT ?
-  `
+  `,
     )
-    .all(userId, `%${keyword}%`, limit);
-  return rows as unknown as MessageRecord[];
+    .all(userId, recallScope(userId), `%${keyword}%`, limit);
+  return (rows as unknown as MessageRecord[]).sort((a, b) =>
+    a.created_at.localeCompare(b.created_at),
+  );
 }
 
 export function getSourcesForMessage(messageId: string): SourceRecord[] {
@@ -182,27 +228,58 @@ export function getSourcesForMessage(messageId: string): SourceRecord[] {
   const rows = db
     .prepare(
       `
-    SELECT id, message_id, url, title, published_at
+    SELECT id, message_id, url, title, published_at, snippet, retrieved_at
     FROM answer_sources
     WHERE message_id = ?
-  `
+  `,
     )
     .all(messageId);
   return rows as unknown as SourceRecord[];
 }
 
-export function getRecentMessages(userId: string, limit: number = 20): MessageRecord[] {
+export function getRecentMessages(
+  userId: string,
+  limit: number = 20,
+): MessageRecord[] {
   const db = getDb();
   const rows = db
     .prepare(
       `
     SELECT id, user_id, role, content, created_at
     FROM messages
-    WHERE user_id = ?
-    ORDER BY created_at ASC
+    WHERE user_id = ? AND status = 'completed'
+    ORDER BY created_at DESC
     LIMIT ?
-  `
+  `,
     )
     .all(userId, limit);
-  return rows as unknown as MessageRecord[];
+  return (rows as unknown as MessageRecord[]).sort((a, b) =>
+    a.created_at.localeCompare(b.created_at),
+  );
+}
+
+export function transaction<T>(fn: () => T): T {
+  const db = getDb();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = fn();
+    db.exec("COMMIT");
+    return result;
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+export function finishMessage(id: string, status: "completed" | "failed") {
+  getDb()
+    .prepare("UPDATE messages SET status = ? WHERE id = ?")
+    .run(status, id);
+}
+
+// Only server-issued UUID namespaces can expand explicit recall across conversations.
+function recallScope(id: string) {
+  return /^[a-f0-9-]{36}:[a-f0-9-]{36}$/.test(id)
+    ? id.split(":")[0] + ":%"
+    : "";
 }

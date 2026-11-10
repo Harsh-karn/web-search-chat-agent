@@ -1,57 +1,46 @@
-# DESIGN.md
+<!-- coderabbit-ai-generated:v1 -->
 
-## Core insight
+<!-- coderabbit-ai-generated-section:v1:4e4489683e1deaba44ae530bb293bfc0b93bfe5694343fa72ba59b1ef96ed066 -->
 
-The task looks like "chat + web search" but the test cases are about **time and conversation memory**: "since Monday", "what did I ask on 3 November", "last Tuesday". Search is the easy half. The hard half is resolving *when* the user means, recalling what was said then, and checking what changed *after* that moment. So the design treats time as a first-class input, and keeps the model's single tool (`web_search`) as thin as possible.
+<!-- coderabbit-ai-generated-section:v1:27855c8999cf9902e1388ad5b8881ef5120ef1036182739e245e4310b23afecb -->
 
-## How it works
+# Design
 
+## Architecture
+One Next.js Node application, one Gemini model-directed loop, one `web_search` tool, and SQLite on durable local storage. No planner model, vector database, or distributed services.
+
+```mermaid
+flowchart LR
+ Client --> Boundary[Signed session / validation / limits]
+ Boundary --> Context[Bounded conversation + temporal recall]
+ DB[(SQLite)] --> Context
+ Context --> Model[Gemini: answer / clarify / search]
+ Model --> Search[Deadline / cache / dedup / concurrency]
+ Search --> Tavily
+ Tavily --> Evidence[Validate / normalize / select excerpts]
+ Evidence --> Model
+ Model --> Stream[Paragraph stream / citation membership]
+ Stream --> Client
+ Stream --> Persist[Atomic answer + cited evidence]
+ Persist --> DB
 ```
-user msg (+ browser timezone)
-  → [1] Temporal resolver     chrono-node, deterministic: "last Tuesday" → 2026-11-03 range
-  → [2] History retriever     SQLite (node:sqlite): past turns in that range, else keyword match
-  → [3] Prompt assembly       system prompt + current date/time/TZ + retrieved turns (each date-stamped)
-  → [4] Agent loop            streaming (Gemini 2.0 Flash), ≤3 rounds, parallel web_search calls
-  → [5] Answer + citations    streamed; turn persisted (question, answer, sources, timestamp)
-```
 
-- **Date and timezone are injected every turn.** Models don't know today's date, and "last Tuesday" is wrong near midnight without the user's timezone.
-- **Everything is persisted with timestamps**, keyed by a user cookie rather than the session, because "what did I ask on 3 November" spans sessions. For each assistant answer we store the sources it cited, so "is your answer still correct?" becomes: load the old answer, then search with `since = answer date`. Built using Node's zero-dependency `node:sqlite`.
-- **`web_search(query, since?, recency?)`** is time-aware, backed by Tavily with published-date filtering. Results are trimmed to title, URL, published date and a short snippet to keep context small.
-- **Parallelism:** "5 CRM tools" becomes 5 simultaneous searches in one step, not 5 sequential rounds. Tokens and tool status stream immediately. Searches are cached by `(query, since, day)`, and the static system prompt uses prompt caching.
+## Request and evidence contracts
+The server ignores client history and identities, accepts only the latest question, and loads owned conversation history. Signed anonymous cookies plus conversation UUIDs scope storage. Reload restores the latest 20 completed messages. Explicit recall can span the same signed user’s conversations; ordinary recent context remains conversation-scoped. Recall runs before saving a pending question. Failed questions are excluded from recall. Date parsing uses the user's timezone and local day boundaries, including DST; explicit intervals use their end date. The first temporal expression is selected; complex multiple-date interpretation remains a limitation.
 
-## Why this shape
+The model answers stable facts directly, reuses supplied evidence for follow-ups, clarifies material ambiguity, and searches uncertain/current facts. These decisions are instructions, not guarantees. The third model step disables tools, reserving synthesis. Limits: three model steps, six search executions, 1,800 output tokens per step, 45-second request deadline. Independent provider requests run three at a time. Current prices use unfiltered current-state search; dated announcements use `start_date`.
 
-- **Deterministic date resolution beats asking the model.** It is faster, free, and testable. A small fast-model fallback handles phrasing chrono-node can't parse.
-- **Memory lives in the harness, not a tool.** The brief allows one tool. A memory tool would also add a model round trip before every recall question, and the model might skip it.
-- **Honesty is designed in, not prompted in.** Three outcomes are worded differently: *no matching history* ("I have nothing from 3 November"), *searched and nothing changed* ("no changes found since 3 Nov across these sources"), and *couldn't find sources* (said plainly, with thin evidence flagged). Every claim carries a URL and source date.
-- **Conversation style:** make a reasonable assumption, state it in one line, proceed. Lead with the conclusion ("Two of five changed: …"). Tables only when comparing items.
+Search validates schemas and HTTP(S) URLs, strips tracking parameters, deduplicates URLs, filters low provider relevance scores, and keeps up to eight 1,200-character excerpts. Provider scores do not establish authority. The process-local cache holds 256 entries, with five-minute TTL for fresh/pricing queries and one hour otherwise. Concurrent identical misses share work with their own eight-second deadline. One retry handles 429/5xx. Subscriber cancellation does not cancel other subscribers' shared search.
 
-## Considered and rejected
+History has a 16,000-character budget; stored evidence is limited to 20 records. Historical content is serialized as untrusted user-level data rather than system instructions. Citation links are checked against supplied evidence, buffered by paragraph to handle split links. Only actually cited evidence is saved with excerpt and retrieval/publication timestamps. Membership is not proof of factual entailment.
 
-| Option | Why not |
-|---|---|
-| Memory as a second tool | Breaks the one-tool rule; adds a round trip |
-| Vector-embedding memory | Overkill for a per-user chat log and poor at date queries; date range plus keyword match is exact |
-| Multi-agent planner | Slower, more failure modes, little gain over one loop with parallel calls |
-| Fetching full pages | Outside the one-tool scope and slow; snippets with dates are enough for "what changed" |
-| More than ~3 loop rounds | Latency grows faster than answer quality |
+## Reliability and deployment
+SQLite WAL, a bounded busy timeout, additive schema upgrades, non-replacing message inserts, and atomic answer/source persistence. Requests have pending/completed/failed states. A per-process admission cap and one active request per conversation bound work; these are single-instance protections, not distributed rate limiting. Production requires a stable SESSION_SECRET of at least 32 characters, HTTPS, durable DATABASE_PATH, restricted filesystem access and backups. Losing the cookie loses anonymous access; this is not account authentication.
 
-## Evals
+## Evaluation and limitations
+`npm test` runs isolated temporal/database tests, 20 preprocessing cases, and regression tests including the actual SDK loop with a scripted model and search. `npm run lint` type-checks; `npm run build` builds. `npm run benchmark -- /tmp/run.json` runs eight optional live scenarios and records answers, latency, usage, calls and human-review fields for comparisons. No claim of live answer accuracy or production p95 is made. Logs report latency, steps, calls, usage and finish reason without prompt contents.
 
-`evals/` seeds past conversations on fixed dates, then runs 20 reproducible test cases: the three brief examples, missing history, ambiguous dates, relative dates near midnight and across timezones, and "nothing changed" cases.
+Deliberate contract changes: validated historical evidence may be cited without a fresh search; material ambiguity warrants clarification. Three dated non-recall fixtures now correctly expect no history selection. Semantic relevance/entailment scoring, selective page extraction, fallback providers, retention automation, and distributed deployment remain future work. Dependency audit advisories require a separately validated major-version migration before production release.
 
-| Metric | Result |
-|---|---|
-| Correct recall / refusal when history is absent | **100.0%** (20/20) |
-| Correct date resolution | **100.0%** (20/20) |
-| Honest "no change" vs "no sources" wording signal | **100.0%** (20/20) |
-| Harness Latency p50 / p95 | **0.68 ms** / **65.41 ms** |
 
-## With another week
-
-1. Claim-level re-verification: extract discrete claims from the old answer and re-check each one separately.
-2. Source-quality ranking (official pricing pages and changelogs over blogs) and a reranker.
-3. A stored per-user timezone profile instead of per-request only.
-4. A larger eval set, with failures from real chats fed back in.
-5. Search-provider fallback and per-domain freshness handling.
+<!-- /coderabbit-ai-generated:v1 -->
